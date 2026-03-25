@@ -1,37 +1,32 @@
 import pygame
 from settings import *
-from sprites import Player, Coin, Mob
 import random
 import math
 
 pygame.init()
 
-screen = pygame.display.set_mode((WIDTH, HEIGHT))
-pygame.display.set_caption("The Runaway Escapee")
+def load_assets():
+    pass
 
-clock = pygame.time.Clock()
-font = pygame.font.SysFont(None, 36)
+    #car_img = pygame.image.load("car_img.png").convert_alpha()
+    #car_img = pygame.transform.scale(car_img, (60, 40))
+    #return car_img
 
-player = pygame.Rect(50, 50, 30, 30)
-player_speed = 4
+def create_game_objects():
+    player = pygame.Rect(50, 50, 30, 30)
 
-coins = []
-TOTAL_COINS = 8
-coins_collected = 0
+    coins = []
+    for i in range(TOTAL_COINS):
+        x = random.randint(100, WIDTH-100)
+        y = random.randint(100, HEIGHT-100)
+        coins.append(pygame.Rect(x, y, 15, 15))
 
-for i in range(TOTAL_COINS):
-    x = random.randint(100, WIDTH-100)
-    y = random.randint(100, HEIGHT-100)
-    coins.append(pygame.Rect(x,y,15,15))
+    gate = pygame.Rect(WIDTH-120, HEIGHT//2-50, 20, 100)
+    car = pygame.Rect(WIDTH+100, HEIGHT//2-20, 60, 40)
+    jail = pygame.Rect(WIDTH//2-40, HEIGHT//2-40, 80, 80)
 
-gate = pygame.Rect(WIDTH-120, HEIGHT//2-50, 20,100)
+    return player, coins, gate, car, jail
 
-# CAR STARTS OFF SCREEN
-car = pygame.Rect(WIDTH+100, HEIGHT//2-20, 60,40)
-car_active = False
-car_speed = 3
-
-jail = pygame.Rect(WIDTH//2-40, HEIGHT//2-40, 80,80)
 
 class Mob:
     def __init__(self, path):
@@ -43,10 +38,8 @@ class Mob:
 
     def move(self):
         target_pos = self.path[self.target]
-
         dx = target_pos[0] - self.rect.x
         dy = target_pos[1] - self.rect.y
-
         dist = math.hypot(dx,dy)
 
         if dist < 2:
@@ -55,83 +48,52 @@ class Mob:
             self.rect.x += self.speed * dx/dist
             self.rect.y += self.speed * dy/dist
 
-    def draw(self):
+    def draw(self, screen):
         pygame.draw.rect(screen, RED, self.rect)
         pygame.draw.circle(screen, RED, self.rect.center, self.vision,1)
 
-    def sees_player(self):
+    def sees_player(self, player):
         distance = math.hypot(player.centerx-self.rect.centerx,
                               player.centery-self.rect.centery)
         return distance < self.vision
 
-mobs = [
-    Mob([(200,200),(400,200),(400,400),(200,400)]),
-    Mob([(600,100),(750,100),(750,300),(600,300)]),
-    Mob([(400,400),(500,100),(600,200),(200,400)])
-]
 
-MAX_SEEN_TIME = 60
-seen_timer = MAX_SEEN_TIME
+def create_mobs():
+    return [
+        Mob([(200,200),(400,200),(400,400),(200,400)]),
+        Mob([(600,100),(750,100),(750,300),(600,300)]),
+        Mob([(400,400),(500,100),(600,200),(200,400)])
+    ]
 
-caught = False
-escaped = False
 
-running = True
+def handle_input(player, speed, keys):
+    if keys[pygame.K_w]: player.y -= speed
+    if keys[pygame.K_s]: player.y += speed
+    if keys[pygame.K_a]: player.x -= speed
+    if keys[pygame.K_d]: player.x += speed
 
-while running:
-
-    clock.tick(60)
-
-    for event in pygame.event.get():
-        if event.type == pygame.QUIT:
-            running = False
-
-    keys = pygame.key.get_pressed()
-
-    if not caught and not escaped:
-
-        if keys[pygame.K_w]: player.y -= player_speed
-        if keys[pygame.K_s]: player.y += player_speed
-        if keys[pygame.K_a]: player.x -= player_speed
-        if keys[pygame.K_d]: player.x += player_speed
-
-    player.clamp_ip(screen.get_rect())
-
+def update_coins(player, coins):
+    collected = 0
     for coin in coins[:]:
         if player.colliderect(coin):
             coins.remove(coin)
-            coins_collected += 1
+            collected += 1
+    return collected
 
-    if coins_collected == TOTAL_COINS:
-        car_active = True
-
-    if coins_collected < TOTAL_COINS:
-        if player.colliderect(gate):
-            if player.x > gate.x:
-                player.x = gate.x + gate.width
-
-    mob_sees = False
-
+def update_mobs(mobs, player):
+    sees = False
     for mob in mobs:
         mob.move()
-        if mob.sees_player():
-            mob_sees = True
+        if mob.sees_player(player):
+            sees = True
+    return sees
 
-    if mob_sees:
-        seen_timer -= 1
-    else:
-        seen_timer = min(MAX_SEEN_TIME, seen_timer + 2)
+def update_car(car, active):
+    if active and car.x > WIDTH-150:
+        car.x -= 3
 
-    if seen_timer <= 0 and not caught:
-        caught = True
-        player.center = jail.center
-
-    # CAR DRIVING ANIMATION
-    if car_active and car.x > WIDTH-150:
-        car.x -= car_speed
-
-    if car_active and player.colliderect(car):
-        escaped = True
+def draw_game(screen, player, coins, mobs, gate, car, jail, car_img,
+              coins_collected, seen_timer, mob_sees, caught, escaped, font, car_active):
 
     screen.fill(GRAY)
 
@@ -141,16 +103,15 @@ while running:
         pygame.draw.circle(screen, YELLOW, coin.center, 7)
 
     for mob in mobs:
-        mob.draw()
+        mob.draw(screen)
 
     if coins_collected < TOTAL_COINS:
         pygame.draw.rect(screen, BLACK, gate)
 
-    # DRAW CAR
     if car_active:
         pygame.draw.rect(screen, GREEN, car)
+        #screen.blit(car_img, car.topleft)
 
-        # SPEECH BUBBLE
         bubble_rect = pygame.Rect(car.x-20, car.y-50, 120,40)
         pygame.draw.rect(screen, WHITE, bubble_rect)
         pygame.draw.rect(screen, BLACK, bubble_rect,2)
@@ -173,9 +134,138 @@ while running:
         screen.blit(text,(WIDTH//2-200, HEIGHT//2+60))
 
     if escaped:
-        text = font.render("wYour apprentice picked you up! Escape successful!", True, WHITE)
+        text = font.render("Your apprentice picked you up! Escape successful!", True, WHITE)
         screen.blit(text,(WIDTH//2-230, HEIGHT//2))
 
-    pygame.display.update()
+def main():
+    screen = pygame.display.set_mode((WIDTH, HEIGHT))
+    pygame.display.set_caption("The Runaway Escapee")
 
-pygame.quit()
+    clock = pygame.time.Clock()
+    font = pygame.font.SysFont(None, 36)
+
+    car_img = load_assets()
+
+    def reset_game():
+        player, coins, gate, car, jail = create_game_objects()
+        mobs = create_mobs()
+
+        return {
+            "player": player,
+            "coins": coins,
+            "gate": gate,
+            "car": car,
+            "jail": jail,
+            "mobs": mobs,
+            "coins_collected": 0,
+            "car_active": False,
+            "seen_timer": 60,
+            "caught": False,
+            "escaped": False
+        }
+
+    # INITIAL STATE
+    state = reset_game()
+
+    player_speed = 4
+    MAX_SEEN_TIME = 60
+
+    running = True
+
+    while running:
+        clock.tick(60)
+
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                running = False
+
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_r:
+                    state = reset_game()
+
+        keys = pygame.key.get_pressed()
+
+        # unpack state
+        player = state["player"]
+        coins = state["coins"]
+        gate = state["gate"]
+        car = state["car"]
+        jail = state["jail"]
+        mobs = state["mobs"]
+        coins_collected = state["coins_collected"]
+        car_active = state["car_active"]
+        seen_timer = state["seen_timer"]
+        caught = state["caught"]
+        escaped = state["escaped"]
+
+        game_over = caught or escaped
+
+        # PLAYER MOVEMENT
+        if not game_over:
+            handle_input(player, player_speed, keys)
+
+        player.clamp_ip(screen.get_rect())
+
+        # COINS
+        if not game_over:
+            coins_collected += update_coins(player, coins)
+
+        if coins_collected == TOTAL_COINS:
+            car_active = True
+
+        # GATE
+        if coins_collected < TOTAL_COINS:
+            if player.colliderect(gate) and player.x > gate.x:
+                player.x = gate.x + gate.width
+
+        # MOBS
+        if not game_over:
+            mob_sees = update_mobs(mobs, player)
+        else:
+            mob_sees = False
+
+        # TIMER
+        if not game_over:
+            if mob_sees:
+                seen_timer -= 1
+            else:
+                seen_timer = min(MAX_SEEN_TIME, seen_timer + 2)
+
+        # CAUGHT / ESCAPE
+        if not game_over:
+            if seen_timer <= 0 and not caught:
+                caught = True
+                player.center = jail.center
+
+            if car_active and player.colliderect(car):
+                escaped = True
+
+        # CAR
+        if not game_over:
+            update_car(car, car_active)
+
+        # SAVE UPDATED STATE
+        state.update({
+            "coins_collected": coins_collected,
+            "car_active": car_active,
+            "seen_timer": seen_timer,
+            "caught": caught,
+            "escaped": escaped
+        })
+
+        # DRAW
+        draw_game(screen, player, coins, mobs, gate, car, jail, car_img,
+                  coins_collected, seen_timer, mob_sees, caught, escaped, font, car_active)
+
+        if game_over:
+            restart_text = font.render("Press R to Restart", True, WHITE)
+            screen.blit(restart_text, (WIDTH//2 - 120, HEIGHT//2 + 100))
+
+        pygame.display.update()
+
+    pygame.quit()
+
+TOTAL_COINS = 8
+
+if __name__ == "__main__":
+    main()
