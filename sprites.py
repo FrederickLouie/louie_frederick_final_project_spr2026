@@ -8,10 +8,9 @@ class Player:
 
     def __init__(self):
         self.rect = pygame.Rect(50,50,PLAYER_SIZE,PLAYER_SIZE)
-        self.health = MAX_HEALTH
 
+    # WASD control
     def move(self, keys):
-
         if keys[pygame.K_w]:
             self.rect.y -= PLAYER_SPEED
 
@@ -51,6 +50,7 @@ class Mob:
         dx = target[0] - self.rect.x
         dy = target[1] - self.rect.y
 
+        # using the distance function defined in utils
         dist = distance(self.rect.x,self.rect.y,target[0],target[1])
 
         if dist < 3:
@@ -60,6 +60,7 @@ class Mob:
             self.rect.x += MOB_SPEED * dx/dist
             self.rect.y += MOB_SPEED * dy/dist
 
+    # if player in mob's radius
     def sees_player(self, player):
 
         d = distance(
