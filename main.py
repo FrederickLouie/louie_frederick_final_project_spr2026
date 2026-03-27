@@ -8,9 +8,6 @@ pygame.init()
 def load_assets():
     pass
 
-    #car_img = pygame.image.load("car_img.png").convert_alpha()
-    #car_img = pygame.transform.scale(car_img, (60, 40))
-    #return car_img
 
 def create_game_objects():
     player = pygame.Rect(50, 50, 30, 30)
@@ -72,6 +69,7 @@ def handle_input(player, speed, keys):
     if keys[pygame.K_a]: player.x -= speed
     if keys[pygame.K_d]: player.x += speed
 
+
 def update_coins(player, coins):
     collected = 0
     for coin in coins[:]:
@@ -79,6 +77,7 @@ def update_coins(player, coins):
             coins.remove(coin)
             collected += 1
     return collected
+
 
 def update_mobs(mobs, player):
     sees = False
@@ -88,12 +87,15 @@ def update_mobs(mobs, player):
             sees = True
     return sees
 
+
 def update_car(car, active):
     if active and car.x > WIDTH-150:
         car.x -= 3
 
+
 def draw_game(screen, player, coins, mobs, gate, car, jail, car_img,
-              coins_collected, seen_timer, mob_sees, caught, escaped, font, car_active):
+              coins_collected, seen_timer, mob_sees, caught, escaped,
+              font, car_active, current_time, best_time):
 
     screen.fill(GRAY)
 
@@ -110,7 +112,6 @@ def draw_game(screen, player, coins, mobs, gate, car, jail, car_img,
 
     if car_active:
         pygame.draw.rect(screen, GREEN, car)
-        #screen.blit(car_img, car.topleft)
 
         bubble_rect = pygame.Rect(car.x-20, car.y-50, 120,40)
         pygame.draw.rect(screen, WHITE, bubble_rect)
@@ -121,8 +122,19 @@ def draw_game(screen, player, coins, mobs, gate, car, jail, car_img,
 
     pygame.draw.rect(screen, BLACK, jail,2)
 
+    # COINS
     coin_text = font.render(f"Coins: {coins_collected}/{TOTAL_COINS}", True, WHITE)
     screen.blit(coin_text,(20,20))
+
+    # TIMER
+    display_time = 0 if current_time is None else round(current_time, 2)
+    time_text = font.render(f"Time: {display_time}s", True, WHITE)
+    screen.blit(time_text, (20, 60))
+
+    # BEST TIME
+    if best_time is not None:
+        best_text = font.render(f"Best: {round(best_time, 2)}s", True, WHITE)
+        screen.blit(best_text, (20, 100))
 
     if mob_sees and not caught:
         seconds_left = round(seen_timer/60,1)
@@ -137,6 +149,7 @@ def draw_game(screen, player, coins, mobs, gate, car, jail, car_img,
         text = font.render("Your apprentice picked you up! Escape successful!", True, WHITE)
         screen.blit(text,(WIDTH//2-230, HEIGHT//2))
 
+
 def main():
     screen = pygame.display.set_mode((WIDTH, HEIGHT))
     pygame.display.set_caption("The Runaway Escapee")
@@ -145,6 +158,8 @@ def main():
     font = pygame.font.SysFont(None, 36)
 
     car_img = load_assets()
+
+    best_time = None
 
     def reset_game():
         player, coins, gate, car, jail = create_game_objects()
@@ -161,10 +176,11 @@ def main():
             "car_active": False,
             "seen_timer": 60,
             "caught": False,
-            "escaped": False
+            "escaped": False,
+            "start_time": pygame.time.get_ticks(),  # ⭐ TIMER START
+            "final_time": None
         }
 
-    # INITIAL STATE
     state = reset_game()
 
     player_speed = 4
@@ -185,7 +201,7 @@ def main():
 
         keys = pygame.key.get_pressed()
 
-        # unpack state
+        # unpack
         player = state["player"]
         coins = state["coins"]
         gate = state["gate"]
@@ -197,10 +213,18 @@ def main():
         seen_timer = state["seen_timer"]
         caught = state["caught"]
         escaped = state["escaped"]
+        start_time = state["start_time"]
+        final_time = state["final_time"]
 
         game_over = caught or escaped
 
-        # PLAYER MOVEMENT
+        # TIMER CALC
+        if not game_over:
+            current_time = (pygame.time.get_ticks() - start_time) / 1000
+        else:
+            current_time = final_time
+
+        # PLAYER
         if not game_over:
             handle_input(player, player_speed, keys)
 
@@ -224,7 +248,7 @@ def main():
         else:
             mob_sees = False
 
-        # TIMER
+        # SEEN TIMER
         if not game_over:
             if mob_sees:
                 seen_timer -= 1
@@ -233,29 +257,35 @@ def main():
 
         # CAUGHT / ESCAPE
         if not game_over:
-            if seen_timer <= 0 and not caught:
+            if seen_timer <= 0:
                 caught = True
                 player.center = jail.center
 
             if car_active and player.colliderect(car):
                 escaped = True
+                final_time = (pygame.time.get_ticks() - start_time) / 1000
+
+                if best_time is None or final_time < best_time:
+                    best_time = final_time
 
         # CAR
         if not game_over:
             update_car(car, car_active)
 
-        # SAVE UPDATED STATE
+        # SAVE STATE
         state.update({
             "coins_collected": coins_collected,
             "car_active": car_active,
             "seen_timer": seen_timer,
             "caught": caught,
-            "escaped": escaped
+            "escaped": escaped,
+            "final_time": final_time
         })
 
         # DRAW
         draw_game(screen, player, coins, mobs, gate, car, jail, car_img,
-                  coins_collected, seen_timer, mob_sees, caught, escaped, font, car_active)
+                  coins_collected, seen_timer, mob_sees, caught, escaped,
+                  font, car_active, current_time, best_time)
 
         if game_over:
             restart_text = font.render("Press R to Restart", True, WHITE)
@@ -264,6 +294,7 @@ def main():
         pygame.display.update()
 
     pygame.quit()
+
 
 TOTAL_COINS = 8
 
