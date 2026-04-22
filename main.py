@@ -9,26 +9,27 @@ pygame.init()
 UI_RECT = pygame.Rect(0, 0, 220, 140)
 
 def load_assets():
-    # fixed indentation and spelling error from original snippet
     car_img = pygame.image.load('car_img.png').convert_alpha()
     coin_img = pygame.image.load('money_bag.png').convert_alpha()
     mob_img = pygame.image.load('mob_img.png').convert_alpha()
+    player_img = pygame.image.load('player_img.png').convert_alpha()
     
     return (
         pygame.transform.scale(car_img, (120, 100)),
-        pygame.transform.scale(coin_img, (50, 50)),
-        pygame.transform.scale(mob_img, (75, 75))
+        pygame.transform.scale(coin_img, (40, 40)),
+        pygame.transform.scale(mob_img, (65, 65)),
+        pygame.transform.scale(player_img, (65, 65))
     )
 
 def create_game_objects():
     # spawning player further down to avoid the top-left UI area
-    player = pygame.Rect(100, 150, 30, 30) 
+    player = pygame.Rect(100, 150, 65, 65) 
 
     coins = []
     for i in range(TOTAL_COINS):
         x = random.randint(100, WIDTH-100)
         y = random.randint(100, HEIGHT-100)
-        coins.append(pygame.Rect(x, y, 50, 50))
+        coins.append(pygame.Rect(x, y, 40, 40))
 
     gate = pygame.Rect(WIDTH-120, HEIGHT//2-50, 20, 100)
     car = pygame.Rect(WIDTH+100, HEIGHT//2-20, 100, 80)
@@ -72,11 +73,14 @@ def create_mobs():
         Mob([(400,400),(500,100),(600,200),(200,400)])
     ]
 
-def handle_input(player, speed, keys):
-    if keys[pygame.K_w]: player.y -= speed
-    if keys[pygame.K_s]: player.y += speed
-    if keys[pygame.K_a]: player.x -= speed
-    if keys[pygame.K_d]: player.x += speed
+def handle_input(player, speed, keys, is_dashing):
+    # If dashing, double the speed, otherwise use normal speed
+    current_speed = speed * 2 if is_dashing else speed
+    
+    if keys[pygame.K_w]: player.y -= current_speed
+    if keys[pygame.K_s]: player.y += current_speed
+    if keys[pygame.K_a]: player.x -= current_speed
+    if keys[pygame.K_d]: player.x += current_speed
 
 def update_coins(player, coins):
     collected = 0
@@ -98,9 +102,9 @@ def update_car(car, active):
     if active and car.x > WIDTH-150:
         car.x -= 3
 
-def draw_game(screen, player, coins, mobs, gate, car, jail, car_img, coin_img, mob_img,
+def draw_game(screen, player, coins, mobs, gate, car, jail, car_img, coin_img, mob_img, player_img,
               coins_collected, seen_timer, mob_sees, caught, escaped,
-              font, car_active, current_time, best_time):
+              font, car_active, current_time, best_time, dash_cooldown):
 
     screen.fill(bg_color)
 
@@ -108,7 +112,7 @@ def draw_game(screen, player, coins, mobs, gate, car, jail, car_img, coin_img, m
     pygame.draw.rect(screen, (30, 30, 30), UI_RECT) 
     pygame.draw.rect(screen, WHITE, UI_RECT, 2)    
 
-    pygame.draw.rect(screen, BLUE, player)
+    screen.blit(player_img, player.topleft)
 
     for coin in coins:
         screen.blit(coin_img, coin.topleft)
@@ -133,7 +137,7 @@ def draw_game(screen, player, coins, mobs, gate, car, jail, car_img, coin_img, m
 
     pygame.draw.rect(screen, BLACK, jail, 2)
 
-    # UI text (offset to fit inside UI_RECT)
+    # UI text
     coin_text = font.render(f"Coins: {coins_collected}/{TOTAL_COINS}", True, WHITE)
     screen.blit(coin_text, (10, 10))
 
@@ -144,6 +148,16 @@ def draw_game(screen, player, coins, mobs, gate, car, jail, car_img, coin_img, m
     if best_time is not None:
         best_text = font.render(f"Best: {round(best_time, 2)}s", True, WHITE)
         screen.blit(best_text, (10, 90))
+
+    # Draw Dash Cooldown Bar
+    bar_width = 200
+    bar_x = WIDTH // 2 - bar_width // 2
+    bar_y = HEIGHT - 40
+    fill_width = int((dash_cooldown / 120) * bar_width)
+    pygame.draw.rect(screen, (100, 100, 100), (bar_x, bar_y, bar_width, 20))
+    pygame.draw.rect(screen, BLUE, (bar_x, bar_y, fill_width, 20))
+    dash_text = font.render("Press Q to Dash", True, WHITE)
+    screen.blit(dash_text, (bar_x, bar_y - 30))
 
     if mob_sees and not caught:
         seconds_left = round(seen_timer/60, 1)
@@ -163,7 +177,7 @@ def main():
     pygame.display.set_caption("The Runaway Escapee")
     clock = pygame.time.Clock()
     font = pygame.font.SysFont(None, 36)
-    car_img, coin_img, mob_img = load_assets()
+    car_img, coin_img, mob_img, player_img = load_assets()
     best_time = None
 
     def reset_game():
@@ -179,6 +193,13 @@ def main():
     state = reset_game()
     player_speed = 4
     MAX_SEEN_TIME = 60
+    
+    # Dash variables
+    dash_cooldown = 120
+    is_dashing = False
+    dash_duration = 10 
+    dash_timer = 0
+    
     running = True
 
     while running:
@@ -191,7 +212,22 @@ def main():
                     state = reset_game()
 
         keys = pygame.key.get_pressed()
-        # Unpack state
+        
+        # dash activation
+        if keys[pygame.K_q] and dash_cooldown >= 120:
+            is_dashing = True
+            dash_timer = dash_duration
+            dash_cooldown = 0
+            
+        if is_dashing:
+            dash_timer -= 1
+            if dash_timer <= 0:
+                is_dashing = False
+        
+        if dash_cooldown < 120:
+            dash_cooldown += 1
+
+        # unpack state
         player = state["player"]
         coins = state["coins"]
         gate = state["gate"]
@@ -214,12 +250,10 @@ def main():
             current_time = final_time
 
         if not game_over:
-            # logic to prevent movement into UI_RECT
             old_pos = player.topleft
-            handle_input(player, player_speed, keys)
+            handle_input(player, player_speed, keys, is_dashing)
             if player.colliderect(UI_RECT):
                 player.topleft = old_pos
-            
             player.clamp_ip(screen.get_rect())
 
         if not game_over:
@@ -262,9 +296,9 @@ def main():
             "final_time": final_time
         })
 
-        draw_game(screen, player, coins, mobs, gate, car, jail, car_img, coin_img, mob_img,
+        draw_game(screen, player, coins, mobs, gate, car, jail, car_img, coin_img, mob_img, player_img,
                   coins_collected, seen_timer, mob_sees, caught, escaped,
-                  font, car_active, current_time, best_time)
+                  font, car_active, current_time, best_time, dash_cooldown)
 
         if game_over:
             restart_text = font.render("Press R to Restart", True, WHITE)
