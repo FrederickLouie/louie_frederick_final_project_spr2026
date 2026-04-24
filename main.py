@@ -5,10 +5,21 @@ import math
 
 pygame.init()
 
+# Add this near your pygame.init()
+pygame.mixer.init()
+
+# Add a function to load sounds
+def load_sounds():
+    # Use .wav for short sound effects
+    return {
+        "coin": pygame.mixer.Sound("chieuk_coin_sound.wav"),
+    }
+
 # define UI area for boundary checking and drawing
 UI_RECT = pygame.Rect(0, 0, 220, 140)
 
 def load_assets():
+    # importing custom made images (Piskel)
     car_img = pygame.image.load('car_img.png').convert_alpha()
     coin_img = pygame.image.load('money_bag.png').convert_alpha()
     mob_img = pygame.image.load('mob_img.png').convert_alpha()
@@ -22,14 +33,21 @@ def load_assets():
     )
 
 def create_game_objects():
-    # spawning player further down to avoid the top-left UI area
+    # Spawning player further down to avoid the top-left UI area
     player = pygame.Rect(100, 150, 65, 65) 
 
     coins = []
     for i in range(TOTAL_COINS):
-        x = random.randint(100, WIDTH-100)
-        y = random.randint(100, HEIGHT-100)
-        coins.append(pygame.Rect(x, y, 40, 40))
+        valid_pos = False
+        while not valid_pos:
+            x = random.randint(0, WIDTH - 40)
+            y = random.randint(0, HEIGHT - 40)
+            new_coin = pygame.Rect(x, y, 40, 40)
+            
+            # Check if the new coin collides with the UI_RECT
+            if not new_coin.colliderect(UI_RECT):
+                valid_pos = True
+                coins.append(new_coin)
 
     gate = pygame.Rect(WIDTH-120, HEIGHT//2-50, 20, 100)
     car = pygame.Rect(WIDTH+100, HEIGHT//2-20, 100, 80)
@@ -59,14 +77,14 @@ class Mob:
 
     def draw(self, screen, mob_img):
         screen.blit(mob_img, self.rect.topleft)
-        pygame.draw.circle(screen, RED, self.rect.center, self.vision, 1)
+        pygame.draw.circle(screen, RED, self.rect.center, self.vision, 1) # creating the radius of the mob
 
     def sees_player(self, player):
         distance = math.hypot(player.centerx-self.rect.centerx,
                               player.centery-self.rect.centery)
         return distance < self.vision
 
-def create_mobs():
+def create_mobs(): #set coordinates for the three mobs
     return [
         Mob([(200,200),(400,200),(400,400),(200,400)]),
         Mob([(600,100),(750,100),(750,300),(600,300)]),
@@ -179,6 +197,7 @@ def main():
     font = pygame.font.SysFont(None, 36)
     car_img, coin_img, mob_img, player_img = load_assets()
     best_time = None
+    sounds = load_sounds()
 
     def reset_game():
         player, coins, gate, car, jail = create_game_objects()
@@ -245,6 +264,12 @@ def main():
         game_over = caught or escaped
 
         if not game_over:
+            collected_this_frame = update_coins(player, coins)
+            if collected_this_frame > 0:
+                sounds["coin"].play()
+            coins_collected += collected_this_frame
+
+        if not game_over:
             current_time = (pygame.time.get_ticks() - start_time) / 1000
         else:
             current_time = final_time
@@ -256,8 +281,8 @@ def main():
                 player.topleft = old_pos
             player.clamp_ip(screen.get_rect())
 
-        if not game_over:
-            coins_collected += update_coins(player, coins)
+        # if not game_over:
+        #     coins_collected += update_coins(player, coins)
 
         if coins_collected == TOTAL_COINS:
             car_active = True
@@ -298,7 +323,7 @@ def main():
 
         draw_game(screen, player, coins, mobs, gate, car, jail, car_img, coin_img, mob_img, player_img,
                   coins_collected, seen_timer, mob_sees, caught, escaped,
-                  font, car_active, current_time, best_time, dash_cooldown)
+                  font, car_active, current_time, best_time, dash_cooldown )
 
         if game_over:
             restart_text = font.render("Press R to Restart", True, WHITE)
