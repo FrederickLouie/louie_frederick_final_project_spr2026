@@ -1,4 +1,4 @@
-import pygame as pg
+import pygame as pg # test
 
 # SCREEN
 WIDTH = 900

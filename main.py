@@ -5,10 +5,10 @@ import math
 
 pygame.init()
 
-# Add this near your pygame.init()
+# for sounds
 pygame.mixer.init()
 
-# Add a function to load sounds
+# importing sounds
 def load_sounds():
     # Use .wav for short sound effects
     return {
@@ -18,8 +18,8 @@ def load_sounds():
 # define UI area for boundary checking and drawing
 UI_RECT = pygame.Rect(0, 0, 220, 140)
 
+# importing custom made images (Piskel)
 def load_assets():
-    # importing custom made images (Piskel)
     car_img = pygame.image.load('car_img.png').convert_alpha()
     coin_img = pygame.image.load('money_bag.png').convert_alpha()
     mob_img = pygame.image.load('mob_img.png').convert_alpha()
@@ -33,7 +33,11 @@ def load_assets():
     )
 
 def create_game_objects():
-    # Spawning player further down to avoid the top-left UI area
+    # define shapes first so they exist for checking
+    gate = pygame.Rect(WIDTH-120, HEIGHT//2-50, 20, 100)
+    car = pygame.Rect(WIDTH+100, HEIGHT//2-20, 100, 80)
+    jail = pygame.Rect(WIDTH//2-40, HEIGHT//2-40, 80, 80)
+    
     player = pygame.Rect(100, 150, 65, 65) 
 
     coins = []
@@ -44,11 +48,16 @@ def create_game_objects():
             y = random.randint(0, HEIGHT - 40)
             new_coin = pygame.Rect(x, y, 40, 40)
             
-            # Check if the new coin collides with the UI_RECT
-            if not new_coin.colliderect(UI_RECT):
+            # check collision with UI, Gate, and Jail to ensure clear spawning
+            if not (new_coin.colliderect(UI_RECT) or 
+                    new_coin.colliderect(gate) or 
+                    new_coin.colliderect(jail)):
                 valid_pos = True
                 coins.append(new_coin)
 
+    return player, coins, gate, car, jail
+
+    # setting up dimensions 
     gate = pygame.Rect(WIDTH-120, HEIGHT//2-50, 20, 100)
     car = pygame.Rect(WIDTH+100, HEIGHT//2-20, 100, 80)
     jail = pygame.Rect(WIDTH//2-40, HEIGHT//2-40, 80, 80)
@@ -56,50 +65,57 @@ def create_game_objects():
     return player, coins, gate, car, jail
 
 class Mob:
-    def __init__(self, path):
-        self.rect = pygame.Rect(path[0][0], path[0][1], 30, 30)
-        self.path = path
-        self.target = 1
-        self.speed = 2
+    def __init__(self, start_pos):
+        self.rect = pygame.Rect(start_pos[0], start_pos[1], 30, 30)
+        self.speed = 2.5
         self.vision = 120
+        # now this will work because the method is inside the class
+        self.destination = self.get_random_target()
+
+    def get_random_target(self):
+        # generate a random position within the screen
+        x = random.randint(50, WIDTH - 50)
+        y = random.randint(50, HEIGHT - 50)
+        return (x, y)
 
     def move(self):
-        target_pos = self.path[self.target]
-        dx = target_pos[0] - self.rect.x
-        dy = target_pos[1] - self.rect.y
+        dx = self.destination[0] - self.rect.x
+        dy = self.destination[1] - self.rect.y
         dist = math.hypot(dx, dy)
 
-        if dist < 2:
-            self.target = (self.target + 1) % len(self.path)
+        if dist < 5:
+            self.destination = self.get_random_target()
         else:
-            self.rect.x += self.speed * dx/dist
-            self.rect.y += self.speed * dy/dist
+            self.rect.x += self.speed * dx / dist
+            self.rect.y += self.speed * dy / dist
 
     def draw(self, screen, mob_img):
         screen.blit(mob_img, self.rect.topleft)
-        pygame.draw.circle(screen, RED, self.rect.center, self.vision, 1) # creating the radius of the mob
+        pygame.draw.circle(screen, (255, 0, 0), self.rect.center, self.vision, 1)
 
     def sees_player(self, player):
-        distance = math.hypot(player.centerx-self.rect.centerx,
-                              player.centery-self.rect.centery)
+        distance = math.hypot(player.centerx - self.rect.centerx,
+                              player.centery - self.rect.centery)
         return distance < self.vision
 
-def create_mobs(): #set coordinates for the three mobs
+def create_mobs():
+    # only pass starting positions now
     return [
-        Mob([(200,200),(400,200),(400,400),(200,400)]),
-        Mob([(600,100),(750,100),(750,300),(600,300)]),
-        Mob([(400,400),(500,100),(600,200),(200,400)])
+        Mob((300, 200)),
+        Mob((600, 100)),
+        Mob((400, 400))
     ]
 
 def handle_input(player, speed, keys, is_dashing):
-    # If dashing, double the speed, otherwise use normal speed
-    current_speed = speed * 2 if is_dashing else speed
+    # if dashing, triple the speed, otherwise use normal speed
+    current_speed = speed * 3 if is_dashing else speed
     
     if keys[pygame.K_w]: player.y -= current_speed
     if keys[pygame.K_s]: player.y += current_speed
     if keys[pygame.K_a]: player.x -= current_speed
     if keys[pygame.K_d]: player.x += current_speed
 
+# used to update coin counter in top-left UI (?/8 coins collected)
 def update_coins(player, coins):
     collected = 0
     for coin in coins[:]:
@@ -108,6 +124,7 @@ def update_coins(player, coins):
             collected += 1
     return collected
 
+# used to see if the player is in the mob's radius or not
 def update_mobs(mobs, player):
     sees = False
     for mob in mobs:
@@ -116,6 +133,7 @@ def update_mobs(mobs, player):
             sees = True
     return sees
 
+# when all coins are collected, car moves
 def update_car(car, active):
     if active and car.x > WIDTH-150:
         car.x -= 3
@@ -130,32 +148,33 @@ def draw_game(screen, player, coins, mobs, gate, car, jail, car_img, coin_img, m
     pygame.draw.rect(screen, (30, 30, 30), UI_RECT) 
     pygame.draw.rect(screen, WHITE, UI_RECT, 2)    
 
-    screen.blit(player_img, player.topleft)
+    screen.blit(player_img, player.topleft) # applying player image
 
     for coin in coins:
-        screen.blit(coin_img, coin.topleft)
+        screen.blit(coin_img, coin.topleft) # applying coin image
 
     for mob in mobs:
-        mob.draw(screen, mob_img)
+        mob.draw(screen, mob_img) # applying mob image
 
     if coins_collected < TOTAL_COINS:
         pygame.draw.rect(screen, gate_color, gate)
 
     if car_active:
-        screen.blit(car_img, (car.x, car.y))
+        screen.blit(car_img, (car.x, car.y)) # applying car image
         bubble_width = 200
         bubble_height = 40
         bubble_x = max(10, min(car.x - 20, WIDTH - bubble_width - 10))
         bubble_y = max(10, car.y - 50)
+        # display a text bubble telling the player to come over to the car
         bubble_rect = pygame.Rect(bubble_x, bubble_y, bubble_width, bubble_height)
         pygame.draw.rect(screen, WHITE, bubble_rect)
         pygame.draw.rect(screen, BLACK, bubble_rect, 2)
-        bubble_text = font.render("Come over here!", True, BLACK)
+        bubble_text = font.render("Come over here!", True, BLACK) 
         screen.blit(bubble_text, (bubble_rect.x + 5, bubble_rect.y + 10))
 
     pygame.draw.rect(screen, BLACK, jail, 2)
 
-    # UI text
+    # establishing UI text (includes coins collected, current time, and best time)
     coin_text = font.render(f"Coins: {coins_collected}/{TOTAL_COINS}", True, WHITE)
     screen.blit(coin_text, (10, 10))
 
@@ -167,32 +186,46 @@ def draw_game(screen, player, coins, mobs, gate, car, jail, car_img, coin_img, m
         best_text = font.render(f"Best: {round(best_time, 2)}s", True, WHITE)
         screen.blit(best_text, (10, 90))
 
-    # Draw Dash Cooldown Bar
+
+    # draw dash cooldown bar
     bar_width = 200
     bar_x = WIDTH // 2 - bar_width // 2
     bar_y = HEIGHT - 40
-    fill_width = int((dash_cooldown / 120) * bar_width)
+    
+    # calculate percentage (0 to 1) and clamp it
+    cooldown_percent = min(dash_cooldown / 120, 1.0)
+    fill_width = int(cooldown_percent * bar_width)
+    
+    # Background of bar
     pygame.draw.rect(screen, (100, 100, 100), (bar_x, bar_y, bar_width, 20))
+    # Filled part
     pygame.draw.rect(screen, BLUE, (bar_x, bar_y, fill_width, 20))
+    # Border
+    pygame.draw.rect(screen, WHITE, (bar_x, bar_y, bar_width, 20), 2)
+    
     dash_text = font.render("Press Q to Dash", True, WHITE)
     screen.blit(dash_text, (bar_x, bar_y - 30))
 
+
+    # player warning if in mob's radius
     if mob_sees and not caught:
         seconds_left = round(seen_timer/60, 1)
         warn = font.render(f"ESCAPE VISION! {seconds_left}s", True, RED)
         screen.blit(warn, (WIDTH//2-100, 20))
 
+    # player if in mob's radius too long (over the 1 second grace period)
     if caught:
         text = font.render("Captured! You are in jail. Mission Failed.", True, WHITE)
         screen.blit(text, (WIDTH//2-200, HEIGHT//2+60))
 
+    # player if collected all 8 coins and touched the car
     if escaped:
         text = font.render("Your apprentice picked you up! Escape successful!", True, WHITE)
         screen.blit(text, (WIDTH//2-230, HEIGHT//2))
 
 def main():
     screen = pygame.display.set_mode((WIDTH, HEIGHT))
-    pygame.display.set_caption("The Runaway Escapee")
+    pygame.display.set_caption("Cops and Robbers")
     clock = pygame.time.Clock()
     font = pygame.font.SysFont(None, 36)
     car_img, coin_img, mob_img, player_img = load_assets()
@@ -213,7 +246,7 @@ def main():
     player_speed = 4
     MAX_SEEN_TIME = 60
     
-    # Dash variables
+    # dash variables
     dash_cooldown = 120
     is_dashing = False
     dash_duration = 10 
@@ -221,6 +254,7 @@ def main():
     
     running = True
 
+    # sets up the quit and restart mechanics of the game
     while running:
         clock.tick(60)
         for event in pygame.event.get():
@@ -237,7 +271,7 @@ def main():
             is_dashing = True
             dash_timer = dash_duration
             dash_cooldown = 0
-            
+        
         if is_dashing:
             dash_timer -= 1
             if dash_timer <= 0:
@@ -266,7 +300,7 @@ def main():
         if not game_over:
             collected_this_frame = update_coins(player, coins)
             if collected_this_frame > 0:
-                sounds["coin"].play()
+                sounds["coin"].play() # plays the coin sound when player touches it
             coins_collected += collected_this_frame
 
         if not game_over:
@@ -281,12 +315,11 @@ def main():
                 player.topleft = old_pos
             player.clamp_ip(screen.get_rect())
 
-        # if not game_over:
-        #     coins_collected += update_coins(player, coins)
-
+        # if all coins collected, car move
         if coins_collected == TOTAL_COINS:
             car_active = True
 
+        # if all coins not collected, gate remains 
         if coins_collected < TOTAL_COINS:
             if player.colliderect(gate) and player.x > gate.x:
                 player.x = gate.x + gate.width
