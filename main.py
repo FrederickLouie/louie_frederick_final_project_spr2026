@@ -2,6 +2,7 @@ import pygame
 from settings import *
 import random
 import math
+import os
 
 pygame.init()
 
@@ -25,12 +26,88 @@ def load_assets():
     mob_img = pygame.image.load('mob_img.png').convert_alpha()
     player_img = pygame.image.load('player_img.png').convert_alpha()
     
+    # sizing the images correctly
     return (
         pygame.transform.scale(car_img, (120, 100)),
         pygame.transform.scale(coin_img, (40, 40)),
         pygame.transform.scale(mob_img, (65, 65)),
         pygame.transform.scale(player_img, (65, 65))
     )
+
+# leaderboard (keeps all scores and usernames)
+SCORE_FILE = "scores.txt"
+
+def load_scores():
+    scores = {}
+    if os.path.exists(SCORE_FILE):
+        with open(SCORE_FILE, "r") as f:
+            for line in f:
+                try:
+                    name, time = line.strip().split(",")
+                    scores[name] = float(time)
+                except:
+                    pass
+    return scores
+
+# imports username and time to SCORE_FILE
+def save_scores(scores):
+    with open(SCORE_FILE, "w") as f:
+        for name, time in scores.items():
+            f.write(f"{name},{time}\n")
+
+# ranking times
+def get_leaderboard(scores):
+    # sort fastest times (lowest first)
+    sorted_scores = sorted(scores.items(), key=lambda x: x[1])
+
+    return sorted_scores[:5]
+
+def title_screen(screen, font):
+    username = ""
+    running = True
+
+    while running:
+        screen.fill((0, 0, 0))
+
+        # game title
+        screen.blit(font.render("Cops and Robbers", True, WHITE), (WIDTH//2 - 150, 40))
+
+        # leaderboard display (TOP 5)
+        scores = load_scores()
+        leaderboard = get_leaderboard(scores)
+
+        screen.blit(font.render("TOP 5 TIMES:", True, WHITE), (WIDTH//2 - 120, 100))
+
+        y = 140
+        if leaderboard:
+            for i, (name, time) in enumerate(leaderboard):
+                text = font.render(f"{i+1}. {name} - {round(time, 2)}s", True, GREEN)
+                screen.blit(text, (WIDTH//2 - 150, y))
+                y += 30
+        else:
+            text = font.render("No scores yet", True, WHITE)
+            screen.blit(text, (WIDTH//2 - 100, y))
+
+        # user types in username here
+        screen.blit(font.render("Enter Username:", True, WHITE), (WIDTH//2 - 150, HEIGHT//2))
+        screen.blit(font.render(username, True, GREEN), (WIDTH//2 - 150, HEIGHT//2 + 40))
+        screen.blit(font.render("Press ENTER to Start", True, WHITE), (WIDTH//2 - 150, HEIGHT//2 + 80))
+
+        pygame.display.update()
+
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit()
+                exit()
+
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_RETURN and username != "":
+                    return username
+                elif event.key == pygame.K_BACKSPACE:
+                    username = username[:-1]
+                else:
+                    if len(username) < 12:
+                        username += event.unicode
 
 def create_game_objects():
     # define shapes first so they exist for checking
@@ -91,7 +168,7 @@ class Mob:
 
     def draw(self, screen, mob_img):
         screen.blit(mob_img, self.rect.topleft)
-        pygame.draw.circle(screen, (255, 0, 0), self.rect.center, self.vision, 1)
+        pygame.draw.circle(screen, (255, 0, 0), self.rect.center, self.vision, 1) # radius circle
 
     def sees_player(self, player):
         distance = math.hypot(player.centerx - self.rect.centerx,
@@ -110,6 +187,7 @@ def handle_input(player, speed, keys, is_dashing):
     # if dashing, triple the speed, otherwise use normal speed
     current_speed = speed * 3 if is_dashing else speed
     
+    # player controls - WASD
     if keys[pygame.K_w]: player.y -= current_speed
     if keys[pygame.K_s]: player.y += current_speed
     if keys[pygame.K_a]: player.x -= current_speed
@@ -133,7 +211,7 @@ def update_mobs(mobs, player):
             sees = True
     return sees
 
-# when all coins are collected, car moves
+# when all coins are collected, car moves into screen
 def update_car(car, active):
     if active and car.x > WIDTH-150:
         car.x -= 3
@@ -161,12 +239,16 @@ def draw_game(screen, player, coins, mobs, gate, car, jail, car_img, coin_img, m
 
     if car_active:
         screen.blit(car_img, (car.x, car.y)) # applying car image
+
+        # display a text bubble telling the player to come over to the car
+
         bubble_width = 200
         bubble_height = 40
         bubble_x = max(10, min(car.x - 20, WIDTH - bubble_width - 10))
         bubble_y = max(10, car.y - 50)
-        # display a text bubble telling the player to come over to the car
+
         bubble_rect = pygame.Rect(bubble_x, bubble_y, bubble_width, bubble_height)
+
         pygame.draw.rect(screen, WHITE, bubble_rect)
         pygame.draw.rect(screen, BLACK, bubble_rect, 2)
         bubble_text = font.render("Come over here!", True, BLACK) 
@@ -174,8 +256,12 @@ def draw_game(screen, player, coins, mobs, gate, car, jail, car_img, coin_img, m
 
     pygame.draw.rect(screen, BLACK, jail, 2)
 
+
+
     # establishing UI text (includes coins collected, current time, and best time)
-    coin_text = font.render(f"Coins: {coins_collected}/{TOTAL_COINS}", True, WHITE)
+
+    # text originally displayed coins but now changed to moneybags
+    coin_text = font.render(f"Moneybags: {coins_collected}/{TOTAL_COINS}", True, WHITE)
     screen.blit(coin_text, (10, 10))
 
     display_time = 0 if current_time is None else round(current_time, 2)
@@ -196,11 +282,11 @@ def draw_game(screen, player, coins, mobs, gate, car, jail, car_img, coin_img, m
     cooldown_percent = min(dash_cooldown / 120, 1.0)
     fill_width = int(cooldown_percent * bar_width)
     
-    # Background of bar
+    # background of bar
     pygame.draw.rect(screen, (100, 100, 100), (bar_x, bar_y, bar_width, 20))
-    # Filled part
+    # filled part
     pygame.draw.rect(screen, BLUE, (bar_x, bar_y, fill_width, 20))
-    # Border
+    # border
     pygame.draw.rect(screen, WHITE, (bar_x, bar_y, bar_width, 20), 2)
     
     dash_text = font.render("Press Q to Dash", True, WHITE)
@@ -229,9 +315,12 @@ def main():
     clock = pygame.time.Clock()
     font = pygame.font.SysFont(None, 36)
     car_img, coin_img, mob_img, player_img = load_assets()
-    best_time = None
+    scores = load_scores()
+    username = title_screen(screen, font)
+    best_time = scores.get(username, None)
     sounds = load_sounds()
 
+    # if game is reset --> returns everything back to original positions
     def reset_game():
         player, coins, gate, car, jail = create_game_objects()
         mobs = create_mobs()
@@ -303,8 +392,10 @@ def main():
                 sounds["coin"].play() # plays the coin sound when player touches it
             coins_collected += collected_this_frame
 
+        # measuring the time 
         if not game_over:
             current_time = (pygame.time.get_ticks() - start_time) / 1000
+        # when game stops (final time)
         else:
             current_time = final_time
 
@@ -323,7 +414,8 @@ def main():
         if coins_collected < TOTAL_COINS:
             if player.colliderect(gate) and player.x > gate.x:
                 player.x = gate.x + gate.width
-
+        
+        # catching player with mob
         if not game_over:
             mob_sees = update_mobs(mobs, player)
         else:
@@ -338,12 +430,26 @@ def main():
         if not game_over:
             if seen_timer <= 0:
                 caught = True
-                player.center = jail.center
+                player.center = jail.center # teleporting player to jail 
+        
+        # player must be in contact with car for game to be won
+        if not game_over:
             if car_active and player.colliderect(car):
                 escaped = True
+
                 final_time = (pygame.time.get_ticks() - start_time) / 1000
-                if best_time is None or final_time < best_time:
-                    best_time = final_time
+                state["final_time"] = final_time
+
+                # time saved only if valid
+                if final_time is not None:
+                    current_best = scores.get(username)
+
+                    # saves only the best score of each user
+                    if current_best is None or final_time < current_best:
+                        scores[username] = final_time
+                        save_scores(scores)
+
+                    best_time = scores[username]
 
         if not game_over:
             update_car(car, car_active)
@@ -358,7 +464,8 @@ def main():
                   coins_collected, seen_timer, mob_sees, caught, escaped,
                   font, car_active, current_time, best_time, dash_cooldown )
 
-        if game_over:
+        # text on screen when game beat or lost
+        if game_over: 
             restart_text = font.render("Press R to Restart", True, WHITE)
             screen.blit(restart_text, (WIDTH//2 - 120, HEIGHT//2 + 100))
 
