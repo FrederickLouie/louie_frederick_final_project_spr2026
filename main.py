@@ -11,10 +11,22 @@ pygame.mixer.init()
 
 # importing sounds
 def load_sounds():
-    # Use .wav for short sound effects
+    # use .wav for short sound effects
     return {
         "coin": pygame.mixer.Sound("chieuk_coin_sound.wav"),
     }
+
+# importing sounds (specifically background music)
+def start_music(file_path):
+    try:
+        pygame.mixer.music.load(file_path)
+        pygame.mixer.music.set_volume(0.5)
+        pygame.mixer.music.play(-1) # -1 loops the track
+    except pygame.error:
+        print("Music file not found!")
+
+# call this before your game loop starts
+start_music("viacheslavstarostin-bg.mp3") 
 
 # define UI area for boundary checking and drawing
 UI_RECT = pygame.Rect(0, 0, 220, 140)
@@ -44,7 +56,7 @@ def load_scores():
             for line in f:
                 try:
                     name, time = line.strip().split(",")
-                    scores[name] = float(time)
+                    scores[name] = float(time) # allow deciamls
                 except:
                     pass
     return scores
