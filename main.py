@@ -268,8 +268,6 @@ def draw_game(screen, player, coins, mobs, gate, car, jail, car_img, coin_img, m
 
     pygame.draw.rect(screen, BLACK, jail, 2)
 
-
-
     # establishing UI text (includes coins collected, current time, and best time)
 
     # text originally displayed coins but now changed to moneybags
@@ -283,7 +281,6 @@ def draw_game(screen, player, coins, mobs, gate, car, jail, car_img, coin_img, m
     if best_time is not None:
         best_text = font.render(f"Best: {round(best_time, 2)}s", True, WHITE)
         screen.blit(best_text, (10, 90))
-
 
     # draw dash cooldown bar
     bar_width = 200
@@ -304,22 +301,37 @@ def draw_game(screen, player, coins, mobs, gate, car, jail, car_img, coin_img, m
     dash_text = font.render("Press Q to Dash", True, WHITE)
     screen.blit(dash_text, (bar_x, bar_y - 30))
 
-
     # player warning if in mob's radius
     if mob_sees and not caught:
         seconds_left = round(seen_timer/60, 1)
         warn = font.render(f"ESCAPE VISION! {seconds_left}s", True, RED)
         screen.blit(warn, (WIDTH//2-100, 20))
 
-    # player if in mob's radius too long (over the 1 second grace period)
-    if caught:
-        text = font.render("Captured! You are in jail. Mission Failed.", True, WHITE)
-        screen.blit(text, (WIDTH//2-200, HEIGHT//2+60))
+# adds a fading screen at end of game (when caught or escaped)
+def draw_end_screen(screen, font, caught, escaped, fade_alpha):
+    # create a black surface for the fade effect
+    fade_surf = pygame.Surface((WIDTH, HEIGHT))
+    fade_surf.set_alpha(fade_alpha)
+    fade_surf.fill((0, 0, 0))
+    screen.blit(fade_surf, (0,0))
 
-    # player if collected all 8 coins and touched the car
-    if escaped:
-        text = font.render("Your apprentice picked you up! Escape successful!", True, WHITE)
-        screen.blit(text, (WIDTH//2-230, HEIGHT//2))
+    # only show the text once the screen has faded fully
+    if fade_alpha >= 180:
+        if caught:
+            # player if in mob's radius too long (over the 1 second grace period)
+            msg = "Captured! You are in jail. Mission Failed."
+            color = WHITE
+        elif escaped:
+            # player if collected all 8 coins and touched the car
+            msg = "Your apprentice picked you up! Escape successful!"
+            color = GREEN
+            
+        text = font.render(msg, True, color)
+        # text on screen when game beat or lost
+        restart_text = font.render("Press R to Restart", True, WHITE)
+        
+        screen.blit(text, (WIDTH//2 - text.get_width()//2, HEIGHT//2))
+        screen.blit(restart_text, (WIDTH//2 - restart_text.get_width()//2, HEIGHT//2 + 60))
 
 def main():
     screen = pygame.display.set_mode((WIDTH, HEIGHT))
@@ -340,7 +352,7 @@ def main():
             "player": player, "coins": coins, "gate": gate, "car": car, "jail": jail,
             "mobs": mobs, "coins_collected": 0, "car_active": False, "seen_timer": 60,
             "caught": False, "escaped": False, "start_time": pygame.time.get_ticks(),
-            "final_time": None
+            "final_time": None, "fade_alpha": 0
         }
 
     state = reset_game()
@@ -395,6 +407,7 @@ def main():
         escaped = state["escaped"]
         start_time = state["start_time"]
         final_time = state["final_time"]
+        fade_alpha = state["fade_alpha"]
 
         game_over = caught or escaped
 
@@ -410,6 +423,9 @@ def main():
         # when game stops (final time)
         else:
             current_time = final_time
+            # update the fade effect when game is over
+            if fade_alpha < 255:
+                fade_alpha += 5
 
         if not game_over:
             old_pos = player.topleft
@@ -469,17 +485,16 @@ def main():
         state.update({
             "coins_collected": coins_collected, "car_active": car_active,
             "seen_timer": seen_timer, "caught": caught, "escaped": escaped,
-            "final_time": final_time
+            "final_time": final_time, "fade_alpha": fade_alpha
         })
 
         draw_game(screen, player, coins, mobs, gate, car, jail, car_img, coin_img, mob_img, player_img,
                   coins_collected, seen_timer, mob_sees, caught, escaped,
                   font, car_active, current_time, best_time, dash_cooldown )
 
-        # text on screen when game beat or lost
+        # show the clean fade end screen if the game is over
         if game_over: 
-            restart_text = font.render("Press R to Restart", True, WHITE)
-            screen.blit(restart_text, (WIDTH//2 - 120, HEIGHT//2 + 100))
+            draw_end_screen(screen, font, caught, escaped, fade_alpha)
 
         pygame.display.update()
     pygame.quit()
