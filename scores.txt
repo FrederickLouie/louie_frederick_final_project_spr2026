@@ -1,3 +1,5 @@
+# NOT IN USE ANYMORE (REFERENCE)
+
 freddy,5.777
 THE GOAT,4.24
 billy67,5.669

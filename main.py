@@ -9,6 +9,12 @@ pygame.init()
 # for sounds
 pygame.mixer.init()
 
+# different modes based on resolution
+MINI_RES = (900, 600)
+FULL_RES = (1450, 900)
+SCORE_FILE_MINI = "scores_mini.txt"
+SCORE_FILE_FULL = "scores_full.txt"
+
 # importing sounds
 def load_sounds():
     # use .wav for short sound effects
@@ -24,9 +30,6 @@ def start_music(file_path):
         pygame.mixer.music.play(-1) # -1 loops the track
     except pygame.error:
         print("Music file not found!")
-
-# call this before your game loop starts
-start_music("viacheslavstarostin-bg.mp3") 
 
 # define UI area for boundary checking and drawing
 UI_RECT = pygame.Rect(0, 0, 220, 140)
@@ -47,12 +50,10 @@ def load_assets():
     )
 
 # leaderboard (keeps all scores and usernames)
-SCORE_FILE = "scores.txt"
-
-def load_scores():
+def load_scores(file_path):
     scores = {}
-    if os.path.exists(SCORE_FILE):
-        with open(SCORE_FILE, "r") as f:
+    if os.path.exists(file_path):
+        with open(file_path, "r") as f:
             for line in f:
                 try:
                     name, time = line.strip().split(",")
@@ -62,8 +63,8 @@ def load_scores():
     return scores
 
 # imports username and time to SCORE_FILE
-def save_scores(scores):
-    with open(SCORE_FILE, "w") as f:
+def save_scores(scores, file_path):
+    with open(file_path, "w") as f:
         for name, time in scores.items():
             f.write(f"{name},{time}\n")
 
@@ -71,39 +72,57 @@ def save_scores(scores):
 def get_leaderboard(scores):
     # sort fastest times (lowest first)
     sorted_scores = sorted(scores.items(), key=lambda x: x[1])
-
     return sorted_scores[:5]
 
 def title_screen(screen, font):
     username = ""
     running = True
 
+    # load both for display purposes
+    mini_scores = load_scores(SCORE_FILE_MINI)
+    full_scores = load_scores(SCORE_FILE_FULL)
+
+    # define button rectangles
+    mini_btn_rect = pygame.Rect(450 - 210, 440, 200, 50)
+    full_btn_rect = pygame.Rect(450 + 10, 440, 200, 50)
+
     while running:
+        mouse_pos = pygame.mouse.get_pos()
         screen.fill((0, 0, 0))
 
         # game title
-        screen.blit(font.render("Cops and Robbers", True, WHITE), (WIDTH//2 - 150, 40))
+        screen.blit(font.render("Cops and Robbers", True, WHITE), (450 - 150, 40))
 
-        # leaderboard display (TOP 5)
-        scores = load_scores()
-        leaderboard = get_leaderboard(scores)
+        # displaying both leaderboards side-by-side
+        screen.blit(font.render("MINI TOP 5:", True, WHITE), (100, 100))
+        y_mini = 140
+        for i, (name, time) in enumerate(get_leaderboard(mini_scores)):
+            screen.blit(font.render(f"{i+1}. {name} - {round(time, 2)}s", True, GREEN), (100, y_mini))
+            y_mini += 30
 
-        screen.blit(font.render("TOP 5 TIMES:", True, WHITE), (WIDTH//2 - 120, 100))
-
-        y = 140
-        if leaderboard:
-            for i, (name, time) in enumerate(leaderboard):
-                text = font.render(f"{i+1}. {name} - {round(time, 2)}s", True, GREEN)
-                screen.blit(text, (WIDTH//2 - 150, y))
-                y += 30
-        else:
-            text = font.render("No scores yet", True, WHITE)
-            screen.blit(text, (WIDTH//2 - 100, y))
+        screen.blit(font.render("FULL TOP 5:", True, WHITE), (550, 100))
+        y_full = 140
+        for i, (name, time) in enumerate(get_leaderboard(full_scores)):
+            screen.blit(font.render(f"{i+1}. {name} - {round(time, 2)}s", True, GREEN), (550, y_full))
+            y_full += 30
 
         # user types in username here
-        screen.blit(font.render("Enter Username:", True, WHITE), (WIDTH//2 - 150, HEIGHT//2))
-        screen.blit(font.render(username, True, GREEN), (WIDTH//2 - 150, HEIGHT//2 + 40))
-        screen.blit(font.render("Press ENTER to Start", True, WHITE), (WIDTH//2 - 150, HEIGHT//2 + 80))
+        screen.blit(font.render("Enter Username:", True, WHITE), (450 - 150, 350))
+        screen.blit(font.render(username, True, GREEN), (450 - 150, 390))
+        
+        # only draw buttons if username is entered
+        if username != "":
+            # mini button
+            mini_color = (100, 100, 100) if mini_btn_rect.collidepoint(mouse_pos) else (50, 50, 50)
+            pygame.draw.rect(screen, mini_color, mini_btn_rect)
+            pygame.draw.rect(screen, WHITE, mini_btn_rect, 2)
+            screen.blit(font.render("Play Mini", True, WHITE), (mini_btn_rect.x + 45, mini_btn_rect.y + 12))
+
+            # full button
+            full_color = (100, 100, 100) if full_btn_rect.collidepoint(mouse_pos) else (50, 50, 50)
+            pygame.draw.rect(screen, full_color, full_btn_rect)
+            pygame.draw.rect(screen, WHITE, full_btn_rect, 2)
+            screen.blit(font.render("Play Full", True, WHITE), (full_btn_rect.x + 45, full_btn_rect.y + 12))
 
         pygame.display.update()
 
@@ -112,20 +131,25 @@ def title_screen(screen, font):
                 pygame.quit()
                 exit()
 
+            if event.type == pygame.MOUSEBUTTONDOWN:
+                if username != "":
+                    if mini_btn_rect.collidepoint(mouse_pos):
+                        return username, "mini"
+                    if full_btn_rect.collidepoint(mouse_pos):
+                        return username, "full"
+
             if event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_RETURN and username != "":
-                    return username
-                elif event.key == pygame.K_BACKSPACE:
+                if event.key == pygame.K_BACKSPACE:
                     username = username[:-1]
                 else:
                     if len(username) < 12:
                         username += event.unicode
 
-def create_game_objects():
+def create_game_objects(current_w, current_h):
     # define shapes first so they exist for checking
-    gate = pygame.Rect(WIDTH-120, HEIGHT//2-50, 20, 100)
-    car = pygame.Rect(WIDTH+100, HEIGHT//2-20, 100, 80)
-    jail = pygame.Rect(WIDTH//2-40, HEIGHT//2-40, 80, 80)
+    gate = pygame.Rect(current_w-120, current_h//2-50, 20, 100)
+    car = pygame.Rect(current_w+100, current_h//2-20, 100, 80)
+    jail = pygame.Rect(current_w//2-40, current_h//2-40, 80, 80)
     
     player = pygame.Rect(100, 150, 65, 65) 
 
@@ -133,8 +157,8 @@ def create_game_objects():
     for i in range(TOTAL_COINS):
         valid_pos = False
         while not valid_pos:
-            x = random.randint(0, WIDTH - 40)
-            y = random.randint(0, HEIGHT - 40)
+            x = random.randint(0, current_w - 40)
+            y = random.randint(0, current_h - 40)
             new_coin = pygame.Rect(x, y, 40, 40)
             
             # check collision with UI, Gate, and Jail to ensure clear spawning
@@ -146,25 +170,20 @@ def create_game_objects():
 
     return player, coins, gate, car, jail
 
-    # setting up dimensions 
-    gate = pygame.Rect(WIDTH-120, HEIGHT//2-50, 20, 100)
-    car = pygame.Rect(WIDTH+100, HEIGHT//2-20, 100, 80)
-    jail = pygame.Rect(WIDTH//2-40, HEIGHT//2-40, 80, 80)
-
-    return player, coins, gate, car, jail
-
 class Mob:
-    def __init__(self, start_pos):
+    def __init__(self, start_pos, current_w, current_h):
         self.rect = pygame.Rect(start_pos[0], start_pos[1], 30, 30)
         self.speed = 2.5
         self.vision = 120
+        self.current_w = current_w
+        self.current_h = current_h
         # now this will work because the method is inside the class
         self.destination = self.get_random_target()
 
     def get_random_target(self):
         # generate a random position within the screen
-        x = random.randint(50, WIDTH - 50)
-        y = random.randint(50, HEIGHT - 50)
+        x = random.randint(50, self.current_w - 50)
+        y = random.randint(50, self.current_h - 50)
         return (x, y)
 
     def move(self):
@@ -187,12 +206,12 @@ class Mob:
                               player.centery - self.rect.centery)
         return distance < self.vision
 
-def create_mobs():
+def create_mobs(current_w, current_h):
     # only pass starting positions now
     return [
-        Mob((300, 200)),
-        Mob((600, 100)),
-        Mob((400, 400))
+        Mob((300, 200), current_w, current_h),
+        Mob((600, 100), current_w, current_h),
+        Mob((400, 400), current_w, current_h)
     ]
 
 def handle_input(player, speed, keys, is_dashing):
@@ -224,13 +243,13 @@ def update_mobs(mobs, player):
     return sees
 
 # when all coins are collected, car moves into screen
-def update_car(car, active):
-    if active and car.x > WIDTH-150:
+def update_car(car, active, current_w):
+    if active and car.x > current_w-150:
         car.x -= 3
 
 def draw_game(screen, player, coins, mobs, gate, car, jail, car_img, coin_img, mob_img, player_img,
               coins_collected, seen_timer, mob_sees, caught, escaped,
-              font, car_active, current_time, best_time, dash_cooldown):
+              font, car_active, current_time, best_time, dash_cooldown, current_w, current_h):
 
     screen.fill(bg_color)
 
@@ -256,7 +275,7 @@ def draw_game(screen, player, coins, mobs, gate, car, jail, car_img, coin_img, m
 
         bubble_width = 200
         bubble_height = 40
-        bubble_x = max(10, min(car.x - 20, WIDTH - bubble_width - 10))
+        bubble_x = max(10, min(car.x - 20, current_w - bubble_width - 10))
         bubble_y = max(10, car.y - 50)
 
         bubble_rect = pygame.Rect(bubble_x, bubble_y, bubble_width, bubble_height)
@@ -284,8 +303,8 @@ def draw_game(screen, player, coins, mobs, gate, car, jail, car_img, coin_img, m
 
     # draw dash cooldown bar
     bar_width = 200
-    bar_x = WIDTH // 2 - bar_width // 2
-    bar_y = HEIGHT - 40
+    bar_x = current_w // 2 - bar_width // 2
+    bar_y = current_h - 40
     
     # calculate percentage (0 to 1) and clamp it
     cooldown_percent = min(dash_cooldown / 120, 1.0)
@@ -305,12 +324,12 @@ def draw_game(screen, player, coins, mobs, gate, car, jail, car_img, coin_img, m
     if mob_sees and not caught:
         seconds_left = round(seen_timer/60, 1)
         warn = font.render(f"ESCAPE VISION! {seconds_left}s", True, RED)
-        screen.blit(warn, (WIDTH//2-100, 20))
+        screen.blit(warn, (current_w//2-100, 20))
 
 # adds a fading screen at end of game (when caught or escaped)
-def draw_end_screen(screen, font, caught, escaped, fade_alpha):
+def draw_end_screen(screen, font, caught, escaped, fade_alpha, current_w, current_h):
     # create a black surface for the fade effect
-    fade_surf = pygame.Surface((WIDTH, HEIGHT))
+    fade_surf = pygame.Surface((current_w, current_h))
     fade_surf.set_alpha(fade_alpha)
     fade_surf.fill((0, 0, 0))
     screen.blit(fade_surf, (0,0))
@@ -326,28 +345,56 @@ def draw_end_screen(screen, font, caught, escaped, fade_alpha):
             msg = "Your apprentice picked you up! Escape successful!"
             color = GREEN
             
+        # render all text surfaces
         text = font.render(msg, True, color)
-        # text on screen when game beat or lost
         restart_text = font.render("Press R to Restart", True, WHITE)
+        quit_text = font.render("Press ESC to Leave the Game", True, RED)
         
-        screen.blit(text, (WIDTH//2 - text.get_width()//2, HEIGHT//2))
-        screen.blit(restart_text, (WIDTH//2 - restart_text.get_width()//2, HEIGHT//2 + 60))
+        # calculate horizontal center once
+        center_x = current_w // 2
+        center_y = current_h // 2
+
+        # blit with progressive vertical offsets
+        screen.blit(text, (center_x - text.get_width() // 2, center_y))
+        
+        # restart text
+        screen.blit(restart_text, (center_x - restart_text.get_width() // 2, center_y + 60))
+        
+        # quit text
+        screen.blit(quit_text, (center_x - quit_text.get_width() // 2, center_y + 120))
 
 def main():
-    screen = pygame.display.set_mode((WIDTH, HEIGHT))
+    # initial temporary screen for title choice
+    screen = pygame.display.set_mode(MINI_RES)
     pygame.display.set_caption("Cops and Robbers")
-    clock = pygame.time.Clock()
     font = pygame.font.SysFont(None, 36)
+
+    # call title screen and get choices
+    username, mode = title_screen(screen, font)
+
+    # apply resolution and leaderboard settings based on choice
+    if mode == "full":
+        W, H = FULL_RES
+        screen = pygame.display.set_mode((W, H), pygame.FULLSCREEN | pygame.SCALED)
+        score_file = SCORE_FILE_FULL
+    else:
+        W, H = MINI_RES
+        screen = pygame.display.set_mode((W, H))
+        score_file = SCORE_FILE_MINI
+
+    clock = pygame.time.Clock()
     car_img, coin_img, mob_img, player_img = load_assets()
-    scores = load_scores()
-    username = title_screen(screen, font)
+    scores = load_scores(score_file)
     best_time = scores.get(username, None)
     sounds = load_sounds()
 
+    # call this before your game loop starts
+    start_music("viacheslavstarostin-bg.mp3") 
+
     # if game is reset --> returns everything back to original positions
     def reset_game():
-        player, coins, gate, car, jail = create_game_objects()
-        mobs = create_mobs()
+        player, coins, gate, car, jail = create_game_objects(W, H)
+        mobs = create_mobs(W, H)
         return {
             "player": player, "coins": coins, "gate": gate, "car": car, "jail": jail,
             "mobs": mobs, "coins_collected": 0, "car_active": False, "seen_timer": 60,
@@ -376,6 +423,9 @@ def main():
             if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_r:
                     state = reset_game()
+                # added escape key to exit fullscreen easily
+                if event.key == pygame.K_ESCAPE:
+                    running = False
 
         keys = pygame.key.get_pressed()
         
@@ -475,12 +525,12 @@ def main():
                     # saves only the best score of each user
                     if current_best is None or final_time < current_best:
                         scores[username] = final_time
-                        save_scores(scores)
+                        save_scores(scores, score_file)
 
                     best_time = scores[username]
 
         if not game_over:
-            update_car(car, car_active)
+            update_car(car, car_active, W)
 
         state.update({
             "coins_collected": coins_collected, "car_active": car_active,
@@ -490,11 +540,11 @@ def main():
 
         draw_game(screen, player, coins, mobs, gate, car, jail, car_img, coin_img, mob_img, player_img,
                   coins_collected, seen_timer, mob_sees, caught, escaped,
-                  font, car_active, current_time, best_time, dash_cooldown )
+                  font, car_active, current_time, best_time, dash_cooldown, W, H)
 
         # show the clean fade end screen if the game is over
         if game_over: 
-            draw_end_screen(screen, font, caught, escaped, fade_alpha)
+            draw_end_screen(screen, font, caught, escaped, fade_alpha, W, H)
 
         pygame.display.update()
     pygame.quit()
