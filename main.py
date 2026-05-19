@@ -161,7 +161,7 @@ def create_game_objects(current_w, current_h):
             y = random.randint(0, current_h - 40)
             new_coin = pygame.Rect(x, y, 40, 40)
             
-            # check collision with UI, Gate, and Jail to ensure clear spawning
+            # check collision with UI, gate, and jail to ensure clear spawning
             if not (new_coin.colliderect(UI_RECT) or 
                     new_coin.colliderect(gate) or 
                     new_coin.colliderect(jail)):
@@ -335,6 +335,8 @@ def draw_end_screen(screen, font, caught, escaped, fade_alpha, current_w, curren
     screen.blit(fade_surf, (0,0))
 
     # only show the text once the screen has faded fully
+
+    # creation of code assisted with Google Gemini
     if fade_alpha >= 180:
         if caught:
             # player if in mob's radius too long (over the 1 second grace period)
@@ -391,7 +393,7 @@ def main():
     # call this before your game loop starts
     start_music("viacheslavstarostin-bg.mp3") 
 
-    # if game is reset --> returns everything back to original positions
+    # if game is reset, return everything back to original positions
     def reset_game():
         player, coins, gate, car, jail = create_game_objects(W, H)
         mobs = create_mobs(W, H)
@@ -549,6 +551,7 @@ def main():
         pygame.display.update()
     pygame.quit()
 
+# can change amount of coins manually to make game easier/harder
 TOTAL_COINS = 8
 if __name__ == "__main__":
     main()
